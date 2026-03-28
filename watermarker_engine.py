@@ -1,16 +1,26 @@
 """
-Watermarker Pro v7.0 - Engine Module
+Watermarker Pro v8.0 - Engine Module
 =====================================
-Core image processing with error handling and optimization
+Core image processing with error handling and optimization.
+
+Зміни v8.0:
+- SVG як вотермарка (через cairosvg → PNG у пам'яті)
+- LRU-кеш шрифтів з обмеженням розміру (cachetools)
+- Токен скасування (CancellationToken) для batch-обробки
+- HEIC/HEIF через pillow-heif
 """
 
 import io
 import os
 import re
 import base64
+import threading
 from typing import Optional, Tuple, Dict
+
 from PIL import Image, ImageEnhance, ImageOps, ImageDraw, ImageFont
 from translitua import translit
+from cachetools import LRUCache
+
 import config
 from logger import get_logger
 from validators import (
@@ -21,15 +31,59 @@ from validators import (
 logger = get_logger(__name__)
 
 # === HEIC/HEIF SUPPORT ===
+_heic_available = False
 try:
     from pillow_heif import register_heif_opener
     register_heif_opener()
+    _heic_available = True
     logger.info("HEIC/HEIF support enabled via pillow-heif")
 except ImportError:
     logger.warning("pillow-heif not installed — HEIC/HEIF files will not be supported")
 
-# Font cache for performance
-_font_cache: Dict[Tuple[str, int], ImageFont.FreeTypeFont] = {}
+# === SVG SUPPORT ===
+_svg_available = False
+try:
+    import cairosvg
+    _svg_available = True
+    logger.info("SVG watermark support enabled via cairosvg")
+except ImportError:
+    logger.warning("cairosvg not installed — SVG watermarks will not be supported")
+
+# === FONT CACHE (LRU, обмежений розмір) ===
+_font_cache: LRUCache = LRUCache(maxsize=config.FONT_CACHE_MAX_SIZE)
+_font_cache_lock = threading.Lock()
+
+
+# === CANCELLATION TOKEN ===
+
+class CancellationToken:
+    """
+    Простий токен скасування для batch-обробки.
+    Передається в executor, кожен worker перевіряє is_cancelled().
+    """
+    def __init__(self):
+        self._cancelled = threading.Event()
+
+    def cancel(self):
+        self._cancelled.set()
+
+    def is_cancelled(self) -> bool:
+        return self._cancelled.is_set()
+
+    def reset(self):
+        self._cancelled.clear()
+
+
+# === HEIC AVAILABILITY ===
+
+def is_heic_available() -> bool:
+    """Повертає True якщо pillow-heif встановлено"""
+    return _heic_available
+
+
+def is_svg_available() -> bool:
+    """Повертає True якщо cairosvg встановлено"""
+    return _svg_available
 
 
 # === ENCODING ===
@@ -68,7 +122,6 @@ def generate_filename(
     try:
         original_name = os.path.basename(original_path)
 
-        # Sanitize prefix
         clean_prefix = ""
         if prefix:
             clean_prefix = re.sub(r'[\s\W\_]+', '-', translit(prefix).lower()).strip('-')
@@ -77,7 +130,6 @@ def generate_filename(
             base_name = clean_prefix if clean_prefix else "image"
             return f"{base_name}_{index:03d}.{extension}"
 
-        # Keep Original mode — strip HEIC/HEIF extension, use output extension
         name_only = os.path.splitext(original_name)[0]
         slug = re.sub(r'[\s\W\_]+', '-', translit(name_only).lower()).strip('-')
         if not slug:
@@ -94,8 +146,8 @@ def generate_filename(
 
 def get_thumbnail(file_path: str, size: Tuple[int, int] = None) -> Optional[str]:
     """
-    Get or create thumbnail with caching.
-    HEIC files are decoded via pillow-heif and cached as JPEG thumbnails.
+    Get or create thumbnail with file-mtime caching.
+    HEIC files decoded via pillow-heif.
     """
     if size is None:
         size = config.THUMBNAIL_SIZE
@@ -103,14 +155,10 @@ def get_thumbnail(file_path: str, size: Tuple[int, int] = None) -> Optional[str]
     thumb_path = f"{file_path}.thumb.jpg"
 
     try:
-        # Check if thumbnail is up-to-date
         if os.path.exists(thumb_path):
-            thumb_mtime = os.path.getmtime(thumb_path)
-            img_mtime = os.path.getmtime(file_path)
-            if thumb_mtime > img_mtime:
+            if os.path.getmtime(thumb_path) > os.path.getmtime(file_path):
                 return thumb_path
 
-        # Generate new thumbnail (pillow-heif makes Image.open HEIC-aware)
         with Image.open(file_path) as img_temp:
             img = ImageOps.exif_transpose(img_temp)
             img = img.convert('RGB')
@@ -142,8 +190,7 @@ def remove_thumbnail(file_path: str) -> bool:
 def rotate_image_file(file_path: str, angle: int) -> bool:
     """
     Rotate image file permanently.
-    For HEIC input, the rotated result is saved as JPEG in-place
-    (HEIC write support requires a paid license).
+    HEIC input: зберігає як JPEG поруч (HEIC write = платний кодек).
     """
     try:
         validate_image_file(file_path)
@@ -157,7 +204,6 @@ def rotate_image_file(file_path: str, angle: int) -> bool:
             rotated = img.rotate(-angle, expand=True, resample=Image.BICUBIC)
 
         if is_heic:
-            # Save as JPEG alongside original; rename path for session
             out_path = os.path.splitext(file_path)[0] + "_rotated.jpg"
             rotated.convert('RGB').save(out_path, "JPEG", quality=95, subsampling=0)
             logger.info(f"HEIC rotated and saved as JPEG: {out_path}")
@@ -175,10 +221,44 @@ def rotate_image_file(file_path: str, angle: int) -> bool:
         return False
 
 
-# === WATERMARK LOADING ===
+# === SVG WATERMARK ===
+
+def load_svg_watermark(svg_bytes: bytes, target_width: int = 500) -> Optional[Image.Image]:
+    """
+    Конвертує SVG у PNG через cairosvg і повертає RGBA PIL Image.
+
+    Args:
+        svg_bytes: Вміст SVG файлу
+        target_width: Ширина растеризації (px). Буде масштабована engine'ом далі.
+
+    Returns:
+        PIL Image у RGBA або None
+    """
+    if not _svg_available:
+        raise ValueError(
+            "cairosvg не встановлено. Встановіть: pip install cairosvg"
+        )
+    if not svg_bytes:
+        raise ValueError("SVG bytes are empty")
+
+    try:
+        png_bytes = cairosvg.svg2png(
+            bytestring=svg_bytes,
+            output_width=target_width
+        )
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        validate_dimensions(img.width, img.height)
+        logger.debug(f"SVG watermark rasterized: {img.width}x{img.height}")
+        return img
+    except Exception as e:
+        logger.error(f"SVG watermark load failed: {e}")
+        raise ValueError(f"Failed to load SVG watermark: {e}")
+
+
+# === PNG WATERMARK ===
 
 def load_watermark_from_bytes(wm_bytes: bytes) -> Image.Image:
-    """Load watermark from bytes with validation"""
+    """Load PNG watermark from bytes with validation"""
     if not wm_bytes:
         raise ValueError("Watermark bytes are empty")
     try:
@@ -191,19 +271,49 @@ def load_watermark_from_bytes(wm_bytes: bytes) -> Image.Image:
         raise ValueError(f"Failed to load watermark: {str(e)}")
 
 
+# === FONT CACHE ===
+
 def get_cached_font(font_path: str, size: int) -> ImageFont.FreeTypeFont:
-    """Get font with caching for performance"""
+    """
+    Get font with LRU caching (обмежений розмір через cachetools.LRUCache).
+    Thread-safe.
+    """
     cache_key = (font_path, size)
-    if cache_key not in _font_cache:
-        try:
-            _font_cache[cache_key] = ImageFont.truetype(font_path, size)
-        except Exception as e:
-            logger.warning(f"Font loading failed: {e}")
-            _font_cache[cache_key] = ImageFont.load_default()
-    return _font_cache[cache_key]
+    with _font_cache_lock:
+        if cache_key in _font_cache:
+            return _font_cache[cache_key]
+
+    try:
+        font = ImageFont.truetype(font_path, size)
+    except Exception as e:
+        logger.warning(f"Font loading failed ({font_path}, {size}px): {e}")
+        font = ImageFont.load_default()
+
+    with _font_cache_lock:
+        _font_cache[cache_key] = font
+
+    return font
 
 
-def create_text_watermark(text: str, font_path: Optional[str], size_pt: int, color_hex: str) -> Optional[Image.Image]:
+def get_font_cache_info() -> Dict:
+    """Повертає статистику кешу шрифтів"""
+    with _font_cache_lock:
+        return {
+            "size": len(_font_cache),
+            "maxsize": _font_cache.maxsize,
+            "hits": getattr(_font_cache, 'hits', 'n/a'),
+            "misses": getattr(_font_cache, 'misses', 'n/a'),
+        }
+
+
+# === TEXT WATERMARK ===
+
+def create_text_watermark(
+    text: str,
+    font_path: Optional[str],
+    size_pt: int,
+    color_hex: str
+) -> Optional[Image.Image]:
     """Create text watermark image"""
     if not text or not text.strip():
         return None
@@ -217,7 +327,7 @@ def create_text_watermark(text: str, font_path: Optional[str], size_pt: int, col
         w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
 
         padding = 20
-        wm = Image.new('RGBA', (w + padding*2, h + padding*2), (0, 0, 0, 0))
+        wm = Image.new('RGBA', (w + padding * 2, h + padding * 2), (0, 0, 0, 0))
         ImageDraw.Draw(wm).text((padding, padding), text, font=font, fill=rgb + (255,))
         return wm
     except Exception as e:
@@ -247,13 +357,27 @@ def process_image(
     wm_obj: Optional[Image.Image],
     resize_config: Dict,
     output_fmt: str,
-    quality: int
+    quality: int,
+    cancel_token: Optional[CancellationToken] = None
 ) -> Tuple[bytes, Dict]:
     """
     Process image with watermark and resize.
-    HEIC/HEIF files are decoded transparently via pillow-heif
-    and exported to the chosen output format (JPEG/WEBP/PNG).
+
+    Args:
+        file_path:      Шлях до вхідного файлу
+        filename:       Ім'я вихідного файлу
+        wm_obj:         Готовий PIL Image вотермарки (або None)
+        resize_config:  Словник налаштувань resize/watermark
+        output_fmt:     'JPEG' | 'WEBP' | 'PNG'
+        quality:        Якість 50–100
+        cancel_token:   Токен скасування (перевіряється до початку важкої роботи)
+
+    Raises:
+        InterruptedError: якщо обробку скасовано через cancel_token
     """
+    if cancel_token and cancel_token.is_cancelled():
+        raise InterruptedError(f"Processing cancelled before: {filename}")
+
     try:
         validate_image_file(file_path)
 
@@ -263,6 +387,10 @@ def process_image(
             orig_w, orig_h = img.size
             orig_size = os.path.getsize(file_path)
             img = img.convert("RGBA")
+
+        # Перевірка скасування після відкриття файлу
+        if cancel_token and cancel_token.is_cancelled():
+            raise InterruptedError(f"Processing cancelled: {filename}")
 
         new_w, new_h, scale_factor = _calculate_resize(orig_w, orig_h, resize_config)
 
@@ -285,6 +413,8 @@ def process_image(
 
         return result_bytes, stats
 
+    except InterruptedError:
+        raise
     except Exception as e:
         logger.error(f"Processing failed for {file_path}: {e}", exc_info=True)
         raise
@@ -344,14 +474,12 @@ def _apply_tiled_watermark(img: Image.Image, wm: Image.Image, config_dict: Dict)
     wm_w, wm_h = wm.size
 
     overlay = Image.new('RGBA', (nw, nh), (0, 0, 0, 0))
-    step_x, step_y = max(10, wm_w + gap), max(10, wm_h + gap)
+    step_x = max(10, wm_w + gap)
+    step_y = max(10, wm_h + gap)
 
     base_rows = (nh // step_y) + 2
     base_cols = (nw // step_x) + 2
 
-    # КЛЮЧОВЕ ВИПРАВЛЕННЯ: У вертикальних фото діагональний зсув на нижніх рядках
-    # вимагає значно більшого від'ємного діапазону колонок, щоб заповнити лівий кут.
-    # col_shift_offset компенсує (row * step_x // 2) при великих значеннях row.
     col_shift_offset = (base_rows // 2) + 3
     start_row, end_row = -2, base_rows + 2
     start_col, end_col = -col_shift_offset, base_cols + col_shift_offset
@@ -360,37 +488,42 @@ def _apply_tiled_watermark(img: Image.Image, wm: Image.Image, config_dict: Dict)
         for col in range(start_col, end_col):
             x = col * step_x + (row * step_x // 2)
             y = row * step_y
-            if (x + wm_w > 0 and x < nw and y + wm_h > 0 and y < nh):
+            if x + wm_w > 0 and x < nw and y + wm_h > 0 and y < nh:
                 overlay.paste(wm, (x, y), wm)
 
     return Image.alpha_composite(img, overlay)
 
 
-def _apply_corner_watermark(img: Image.Image, wm: Image.Image, pos: str, config_dict: Dict) -> Image.Image:
+def _apply_corner_watermark(
+    img: Image.Image,
+    wm: Image.Image,
+    pos: str,
+    config_dict: Dict
+) -> Image.Image:
     """Apply watermark to specific position"""
     margin = config_dict.get('wm_margin', 15)
     nw, nh = img.size
     ww, wh = wm.size
 
-    if pos == 'bottom-right':
-        px, py = nw - ww - margin, nh - wh - margin
-    elif pos == 'bottom-left':
-        px, py = margin, nh - wh - margin
-    elif pos == 'top-right':
-        px, py = nw - ww - margin, margin
-    elif pos == 'top-left':
-        px, py = margin, margin
-    elif pos == 'center':
-        px, py = (nw - ww) // 2, (nh - wh) // 2
-    else:
-        px, py = margin, margin
-
+    positions = {
+        'bottom-right': (nw - ww - margin, nh - wh - margin),
+        'bottom-left':  (margin,            nh - wh - margin),
+        'top-right':    (nw - ww - margin,  margin),
+        'top-left':     (margin,            margin),
+        'center':       ((nw - ww) // 2,    (nh - wh) // 2),
+    }
+    px, py = positions.get(pos, (margin, margin))
     img.paste(wm, (max(0, min(px, nw - ww)), max(0, min(py, nh - wh))), wm)
     return img
 
 
-def _export_image(img: Image.Image, fmt: str, qual: int, exif: Optional[bytes]) -> bytes:
-    """Export to bytes"""
+def _export_image(
+    img: Image.Image,
+    fmt: str,
+    qual: int,
+    exif: Optional[bytes]
+) -> bytes:
+    """Export PIL image to bytes in chosen format"""
     if fmt == "JPEG":
         bg = Image.new("RGB", img.size, (255, 255, 255))
         bg.paste(img, mask=img.split()[3])
@@ -399,9 +532,9 @@ def _export_image(img: Image.Image, fmt: str, qual: int, exif: Optional[bytes]) 
         img = img.convert("RGB")
 
     buf = io.BytesIO()
-    sk = {"format": fmt}
+    sk: Dict = {"format": fmt}
 
-    if exif and fmt in ["JPEG", "WEBP"]:
+    if exif and fmt in ("JPEG", "WEBP"):
         sk['exif'] = exif
 
     if fmt == "JPEG":

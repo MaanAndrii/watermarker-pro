@@ -4,3 +4,6 @@ translitua
 pandas
 streamlit-cropper-fix
 pillow-heif
+cairosvg
+cachetools
+streamlit-sortables

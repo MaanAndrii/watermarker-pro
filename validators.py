@@ -1,5 +1,5 @@
 """
-Watermarker Pro v7.0 - Validation Module
+Watermarker Pro v8.0 - Validation Module
 =========================================
 Input validation and sanitization
 """
@@ -55,7 +55,6 @@ def validate_image_file(file_path: str) -> bool:
     """
     validate_file_path(file_path)
 
-    # Check extension
     ext = Path(file_path).suffix.lower()
     if ext not in config.SUPPORTED_INPUT_FORMATS:
         raise ValidationError(
@@ -63,7 +62,6 @@ def validate_image_file(file_path: str) -> bool:
             f"Supported: {', '.join(config.SUPPORTED_INPUT_FORMATS)}"
         )
 
-    # Check file size
     file_size = os.path.getsize(file_path)
     if file_size > config.MAX_FILE_SIZE:
         size_mb = file_size / (1024 * 1024)
@@ -74,18 +72,16 @@ def validate_image_file(file_path: str) -> bool:
 
     is_heic = ext in ('.heic', '.heif')
 
-    # Verify image integrity
     try:
         if is_heic:
-            # img.verify() can raise false errors on valid iPhone HEIC files.
-            # Use a full decode (img.size forces pixel read) as a reliable check.
+            # img.verify() може давати false-negative на валідних iPhone HEIC.
+            # Примусовий decode через img.size надійніший.
             with Image.open(file_path) as img:
-                _ = img.size
                 width, height = img.size
         else:
             with Image.open(file_path) as img:
                 img.verify()
-            # Reopen after verify() — verify() invalidates the file handle
+            # Після verify() потрібно відкрити повторно — verify() інвалідує handle
             with Image.open(file_path) as img:
                 width, height = img.size
 
@@ -122,22 +118,15 @@ def sanitize_filename(filename: str) -> str:
     if not filename:
         return "unnamed"
 
-    # Keep only filename (remove path)
     filename = Path(filename).name
-
-    # Remove dangerous characters
     filename = re.sub(r'[<>:"|?\*\x00-\x1f]', '', filename)
-
-    # Replace spaces with underscores
     filename = filename.replace(' ', '_')
 
-    # Limit length
     if len(filename) > config.MAX_FILENAME_LENGTH:
         name, ext = os.path.splitext(filename)
         max_name_len = config.MAX_FILENAME_LENGTH - len(ext)
         filename = name[:max_name_len] + ext
 
-    # Ensure not empty
     if not filename or filename == '.':
         filename = "unnamed.jpg"
 

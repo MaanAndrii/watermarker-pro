@@ -1,5 +1,5 @@
 """
-Watermarker Pro v7.0 - Configuration Module
+Watermarker Pro v8.0 - Configuration Module
 ============================================
 Centralized configuration and constants
 """
@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 # === APPLICATION INFO ===
-APP_VERSION = "7.0"
+APP_VERSION = "8.0"
 APP_NAME = "Watermarker Pro"
 APP_AUTHOR = "Marynyuk Andriy"
 APP_LICENSE = "Proprietary"
@@ -17,11 +17,17 @@ APP_REPO = "https://github.com/MaanAndrii"
 # === FILE SETTINGS ===
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 MAX_FILENAME_LENGTH = 255
+
+# Input: jpg/png/webp/heic/heif — звичайні растрові формати
+# SVG підтримується лише як вотермарка, не як вхідне фото
 SUPPORTED_INPUT_FORMATS = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']
 SUPPORTED_OUTPUT_FORMATS = ['JPEG', 'WEBP', 'PNG']
 
+# Підтримувані формати вотермарки (растр + вектор)
+SUPPORTED_WATERMARK_FORMATS = ['png', 'svg']
+
 # === IMAGE PROCESSING ===
-MAX_IMAGE_DIMENSION = 10000  # Maximum width or height
+MAX_IMAGE_DIMENSION = 10000     # Maximum width or height
 MIN_IMAGE_DIMENSION = 10
 THUMBNAIL_SIZE = (300, 300)
 PROXY_IMAGE_WIDTH = 700
@@ -32,6 +38,9 @@ MAX_WATERMARK_SCALE = 100
 MIN_OPACITY = 0.1
 MAX_OPACITY = 1.0
 DEFAULT_TEXT_SIZE_PT = 100
+
+# === FONT CACHE ===
+FONT_CACHE_MAX_SIZE = 100       # Максимум записів у LRU-кеші шрифтів
 
 # === ASPECT RATIOS ===
 ASPECT_RATIOS = {
