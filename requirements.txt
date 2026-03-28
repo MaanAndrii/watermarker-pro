@@ -3,3 +3,4 @@ Pillow
 translitua
 pandas
 streamlit-cropper-fix
+pillow-heif
