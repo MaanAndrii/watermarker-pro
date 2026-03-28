@@ -18,6 +18,13 @@ from validators import (
     validate_scale_factor, safe_divide, validate_color_hex
 )
 
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    logger.info("HEIC/HEIF support enabled via pillow-heif")
+except ImportError:
+    logger.warning("pillow-heif not installed — HEIC/HEIF files will not be supported")
+
 logger = get_logger(__name__)
 
 # Font cache for performance
