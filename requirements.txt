@@ -4,6 +4,7 @@ translitua
 pandas
 streamlit-cropper-fix
 pillow-heif
-cairosvg
+svglib
+reportlab
 cachetools
 streamlit-sortables

@@ -41,13 +41,16 @@ except ImportError:
     logger.warning("pillow-heif not installed — HEIC/HEIF files will not be supported")
 
 # === SVG SUPPORT ===
+# svglib + reportlab — чисто Python, не потребує системних бібліотек (libcairo тощо).
+# Сумісно зі Streamlit Cloud, Railway, Heroku та іншими managed середовищами.
 _svg_available = False
 try:
-    import cairosvg
+    from svglib.svglib import svg2rlg
+    from reportlab.graphics import renderPM
     _svg_available = True
-    logger.info("SVG watermark support enabled via cairosvg")
+    logger.info("SVG watermark support enabled via svglib+reportlab")
 except ImportError:
-    logger.warning("cairosvg not installed — SVG watermarks will not be supported")
+    logger.warning("svglib/reportlab not installed — SVG watermarks will not be supported")
 
 # === FONT CACHE (LRU, обмежений розмір) ===
 _font_cache: LRUCache = LRUCache(maxsize=config.FONT_CACHE_MAX_SIZE)
@@ -225,34 +228,71 @@ def rotate_image_file(file_path: str, angle: int) -> bool:
 
 def load_svg_watermark(svg_bytes: bytes, target_width: int = 500) -> Optional[Image.Image]:
     """
-    Конвертує SVG у PNG через cairosvg і повертає RGBA PIL Image.
+    Конвертує SVG у RGBA PIL Image через svglib + reportlab.
+
+    svglib/reportlab — чисто Python, без системних залежностей (на відміну від cairosvg).
+    Сумісно зі Streamlit Cloud.
+
+    Pipeline:
+        SVG bytes → temp file → svg2rlg() → Drawing → renderPM (PNG bytes) → PIL RGBA
 
     Args:
-        svg_bytes: Вміст SVG файлу
-        target_width: Ширина растеризації (px). Буде масштабована engine'ом далі.
+        svg_bytes:    Вміст SVG файлу
+        target_width: Бажана ширина растеризації (px). Масштабується пропорційно.
 
     Returns:
-        PIL Image у RGBA або None
+        PIL Image у RGBA
+
+    Raises:
+        ValueError: якщо svglib не встановлено або SVG не вдалося розпарсити
     """
     if not _svg_available:
         raise ValueError(
-            "cairosvg не встановлено. Встановіть: pip install cairosvg"
+            "svglib/reportlab не встановлено. Встановіть: pip install svglib reportlab"
         )
     if not svg_bytes:
         raise ValueError("SVG bytes are empty")
 
+    import tempfile
+    import os
+
+    tmp_path = None
     try:
-        png_bytes = cairosvg.svg2png(
-            bytestring=svg_bytes,
-            output_width=target_width
-        )
-        img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        # svglib.svg2rlg() приймає шлях до файлу, не bytes
+        with tempfile.NamedTemporaryFile(suffix='.svg', delete=False) as f:
+            f.write(svg_bytes)
+            tmp_path = f.name
+
+        drawing = svg2rlg(tmp_path)
+        if drawing is None:
+            raise ValueError("svg2rlg returned None — SVG може бути пошкодженим або непідтримуваним")
+
+        # Масштабуємо Drawing до target_width зберігаючи пропорції
+        if drawing.width > 0:
+            scale = target_width / drawing.width
+            drawing.width  = target_width
+            drawing.height = drawing.height * scale
+            drawing.transform = (scale, 0, 0, scale, 0, 0)
+
+        # Рендеримо у PNG bytes у пам'яті
+        buf = io.BytesIO()
+        renderPM.drawToFile(drawing, buf, fmt='PNG')
+        buf.seek(0)
+
+        img = Image.open(buf).convert("RGBA")
         validate_dimensions(img.width, img.height)
         logger.debug(f"SVG watermark rasterized: {img.width}x{img.height}")
         return img
-    except Exception as e:
+
+    except (ValueError, Exception) as e:
         logger.error(f"SVG watermark load failed: {e}")
         raise ValueError(f"Failed to load SVG watermark: {e}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 # === PNG WATERMARK ===
