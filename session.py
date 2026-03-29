@@ -34,10 +34,9 @@ def init_session_state():
         'selected_files': set(),
         'uploader_key': 0,
         'lang_code': 'ua',
-        'editing_file': None,
-        'editor_open':  False,   # True тільки після натискання кнопки — запобігає
-                                 # самовільному відкриттю при кожному rerun
-        'close_editor': False,
+        # editing_file, editor_open, close_editor — видалено.
+        # @st.dialog викликається напряму всередині if st.button() —
+        # жодних прапорців не потрібно.
         'results': None,
         'cancel_token': None,       # CancellationToken | None
         'processing_active': False, # True поки йде batch

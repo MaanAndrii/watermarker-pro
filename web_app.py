@@ -582,26 +582,13 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
 
-            # ── EDITOR ────────────────────────────────────────────────────
-            # Натискання кнопки встановлює editing_file + editor_open=True.
-            # editor_open скидається після закриття діалогу.
-            # Це єдиний надійний спосіб уникнути самовільного відкриття при rerun.
+            # ── EDITOR ────────────────────────────────────────────
+            # Діалог викликається ТІЛЬКИ всередині if st.button — тобто лише
+            # в тому реруні коли кнопку натиснуто. Будь-які прапорці в session_state
+            # (включаючи editor_open) не працюють, бо @st.dialog робить rerun
+            # після закриття, і прапорець True знову відкриває діалог.
             if st.button(T['btn_open_editor'], type="primary", use_container_width=True):
-                st.session_state['editing_file'] = fpath
-                st.session_state['editor_open']  = True
-                st.session_state['close_editor'] = False
-
-            # Відкриваємо лише якщо editor_open явно True для саме цього файлу
-            if (st.session_state.get('editor_open') and
-                    st.session_state.get('editing_file') == fpath and
-                    not st.session_state.get('close_editor')):
                 editor.open_editor_dialog(fpath, T)
-
-            # Після закриття скидаємо всі прапори
-            if st.session_state.get('close_editor'):
-                st.session_state['editing_file'] = None
-                st.session_state['editor_open']  = False
-                st.session_state['close_editor'] = False
 
             st.divider()
 
