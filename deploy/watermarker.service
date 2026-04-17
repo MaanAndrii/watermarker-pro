@@ -1,0 +1,20 @@
+[Unit]
+Description=Watermarker Pro (Streamlit)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/watermarker-pro
+EnvironmentFile=-/etc/watermarker-pro.env
+ExecStart=/opt/watermarker-pro/.venv/bin/bash /opt/watermarker-pro/scripts/run_pi.sh
+Restart=always
+RestartSec=5
+MemoryMax=700M
+CPUQuota=250%
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
