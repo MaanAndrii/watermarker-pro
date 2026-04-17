@@ -49,7 +49,6 @@ watermarker.log
 
 # Streamlit
 .streamlit/secrets.toml
-.streamlit/config.toml
 
 # Testing
 .pytest_cache/
