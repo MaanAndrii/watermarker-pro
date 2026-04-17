@@ -90,35 +90,8 @@ CORNER_SETTINGS = {
 # === PERFORMANCE ===
 MIN_THREADS = 1
 MAX_THREADS = 8
+DEFAULT_THREADS = 2
 CACHE_TTL = 300  # seconds
-
-
-def _read_int_env(name: str, default: int, min_value: int = None, max_value: int = None) -> int:
-    """Read integer from env with optional bounds and fallback."""
-    raw = os.getenv(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    if min_value is not None:
-        value = max(min_value, value)
-    if max_value is not None:
-        value = min(max_value, value)
-    return value
-
-
-CPU_COUNT = os.cpu_count() or 1
-# Conservative default for Raspberry Pi-class hardware
-AUTO_DEFAULT_THREADS = max(MIN_THREADS, min(4, CPU_COUNT))
-DEFAULT_THREADS = _read_int_env("WM_DEFAULT_THREADS", AUTO_DEFAULT_THREADS, MIN_THREADS, MAX_THREADS)
-
-# Optional runtime overrides for constrained devices
-MAX_FILE_SIZE = _read_int_env("WM_MAX_FILE_SIZE_MB", MAX_FILE_SIZE // (1024 * 1024), 1) * 1024 * 1024
-MAX_IMAGE_DIMENSION = _read_int_env("WM_MAX_IMAGE_DIMENSION", MAX_IMAGE_DIMENSION, MIN_IMAGE_DIMENSION, 20000)
-MAX_THREADS = _read_int_env("WM_MAX_THREADS", MAX_THREADS, MIN_THREADS, 32)
-DEFAULT_THREADS = min(DEFAULT_THREADS, MAX_THREADS)
 
 # === PATHS ===
 def get_project_root() -> Path:
@@ -132,15 +105,6 @@ def get_assets_dir() -> Path:
 def get_fonts_dir() -> Path:
     """Get fonts directory"""
     return get_assets_dir() / 'fonts'
-
-
-def get_work_dir() -> Path:
-    """
-    Base working directory for temporary upload/session folders.
-    Defaults to /tmp/wm-pro but can be overridden with WM_WORK_DIR.
-    """
-    base = os.getenv("WM_WORK_DIR", "/tmp/wm-pro")
-    return Path(base)
 
 # === LOGGING ===
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

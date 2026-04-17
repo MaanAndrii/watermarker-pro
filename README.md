@@ -52,52 +52,6 @@ pip install -r requirements.txt
 streamlit run web_app.py
 ```
 
-### 🥧 Деплой у локальній мережі на Raspberry Pi
-
-1. Встановіть залежності та створіть venv:
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-2. Перевірте runtime-сумісність (HEIC/SVG/imports):
-```bash
-python scripts/check_runtime.py
-```
-
-3. Запуск у LAN (доступ з інших пристроїв):
-```bash
-streamlit run web_app.py --server.address 0.0.0.0 --server.port 8501
-```
-
-4. Для автозапуску через `systemd` використайте:
-- `deploy/watermarker.service`
-- `deploy/watermarker-pro.env.example`
-
-5. Для Raspberry Pi можна зменшити ліміти через env:
-```bash
-export WM_MAX_THREADS=4
-export WM_DEFAULT_THREADS=2
-export WM_MAX_FILE_SIZE_MB=50
-export WM_MAX_IMAGE_DIMENSION=8000
-export WM_WORK_DIR=/var/lib/watermarker/tmp
-```
-
-### Чи можна прибрати обмеження Streamlit повністю?
-
-Коротко: **ні, повністю без лімітів не можна** (через websocket/message модель Streamlit).
-Але для LAN можна суттєво підняти межі:
-
-```bash
-export WM_STREAMLIT_MAX_UPLOAD_MB=1024
-export WM_STREAMLIT_MAX_MESSAGE_MB=1024
-bash scripts/run_pi.sh
-```
-
-Для `systemd` ці змінні задаються у `deploy/watermarker-pro.env.example`,
-а сервіс запускає `scripts/run_pi.sh`.
-
 ### Структура проєкту
 
 ```
@@ -121,17 +75,6 @@ watermarker-pro/
 ---
 
 ## 🎨 Використання
-
-### Для чого в проєкті Streamlit?
-
-Streamlit тут виконує роль **швидкого UI-шару** над вашим Python-ядром обробки зображень:
-
-- дає веб-інтерфейс без окремого фронтенд-фреймворку;
-- дозволяє швидко зібрати workflow: upload → налаштування → preview → batch processing;
-- добре підходить для внутрішнього інструменту в LAN, де важлива швидкість розробки, а не складний продукт-frontend.
-
-Тобто Streamlit у цьому проєкті — це не “ядро обробки”, а **оболонка для взаємодії з користувачем**.
-Ядро обробки живе окремо в `watermarker_engine.py`.
 
 ### 1. Базовий workflow
 

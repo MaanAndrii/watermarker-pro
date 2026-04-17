@@ -56,9 +56,7 @@ def cleanup_temp_directory():
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
             logger.info(f"Temp directory cleaned: {temp_dir}")
-        work_dir = config.get_work_dir()
-        work_dir.mkdir(parents=True, exist_ok=True)
-        st.session_state['temp_dir'] = tempfile.mkdtemp(prefix="wm_pro_v8_", dir=str(work_dir))
+        st.session_state['temp_dir'] = tempfile.mkdtemp(prefix="wm_pro_v8_")
     except Exception as e:
         logger.error(f"Cleanup failed: {e}")
 
