@@ -38,76 +38,30 @@ def inject_css():
     """Inject custom CSS for UI styling"""
     st.markdown("""
 <style>
-.stApp {
-    background: linear-gradient(180deg, #f7f9fc 0%, #ffffff 40%);
-}
-.block-container {
-    max-width: 1400px;
-    padding-top: 1.4rem;
-    padding-bottom: 2rem;
-}
-.wm-hero {
-    padding: 16px 18px;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    color: #f8fafc;
-    margin-bottom: 14px;
-    border: 1px solid rgba(255,255,255,0.08);
-}
-.wm-hero h3 {
-    margin: 0 0 6px 0;
-    font-weight: 700;
-    letter-spacing: .2px;
-}
-.wm-hero p {
-    margin: 0;
-    opacity: .9;
-}
-.wm-badge-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-}
-.wm-badge {
-    font-size: 12px;
-    border-radius: 999px;
-    padding: 3px 10px;
-    background: rgba(255,255,255,.12);
-    border: 1px solid rgba(255,255,255,.18);
-}
 div[data-testid="column"] {
-    background-color: #ffffff;
-    border-radius: 12px;
-    padding: 12px;
-    border: 1px solid #e9eef5;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid #eee;
     transition: all 0.2s ease;
 }
 div[data-testid="column"]:hover {
-    border-color: #d1dff5;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+    border-color: #ff4b4b;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
-div[data-testid="column"] button {
-    width: 100%;
-    margin-top: 5px;
-}
-.stButton > button {
-    border-radius: 10px !important;
-}
+div[data-testid="column"] button { width: 100%; margin-top: 5px; }
+.block-container { padding-top: 2rem; }
 .preview-placeholder {
-    border: 1px dashed #cfd8e3;
-    border-radius: 12px;
-    padding: 34px 18px;
+    border: 2px dashed #e0e0e0;
+    border-radius: 10px;
+    padding: 40px 20px;
     text-align: center;
-    color: #6b7280;
-    background-color: #f8fafc;
+    color: #888;
+    background-color: #fafafa;
     margin-top: 10px;
 }
-.preview-icon {
-    font-size: 40px;
-    margin-bottom: 10px;
-    display: block;
-}
+.preview-icon { font-size: 40px; margin-bottom: 10px; display: block; }
 </style>
 """, unsafe_allow_html=True)
 

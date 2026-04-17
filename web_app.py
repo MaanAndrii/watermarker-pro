@@ -230,26 +230,6 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────────────
 st.title(T['title'])
 st.caption(T['subtitle'])
-st.markdown(
-    """
-    <div class="wm-hero">
-        <h3>⚡ Watermarker Workspace</h3>
-        <p>Upload → configure watermark → preview → batch export.</p>
-        <div class="wm-badge-row">
-            <span class="wm-badge">Batch Processing</span>
-            <span class="wm-badge">HEIC/HEIF Ready</span>
-            <span class="wm-badge">Text + Logo + SVG</span>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-h1, h2, h3, h4 = st.columns(4)
-h1.metric("📁 Files", len(st.session_state.get('file_cache', {})))
-h2.metric("✅ Selected", len(st.session_state.get('selected_files', set())))
-h3.metric("🧵 Threads", max_threads)
-h4.metric("📦 Output", st.session_state.get('out_fmt_key', 'JPEG'))
 
 c_left, c_right = st.columns([1.8, 1], gap="large")
 

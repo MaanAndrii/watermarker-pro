@@ -8,8 +8,6 @@ Watermarker Pro v8.0 - Session Module
 import streamlit as st
 import tempfile
 import threading
-import shutil
-from datetime import datetime, timedelta
 
 import config
 from logger import get_logger
@@ -17,34 +15,6 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 _session_lock = threading.Lock()
-SESSION_DIR_PREFIX = "wm_pro_v8_"
-STALE_SESSION_HOURS = 24
-
-
-def _ensure_work_dir():
-    """Create base work directory if missing."""
-    work_dir = config.get_work_dir()
-    work_dir.mkdir(parents=True, exist_ok=True)
-    return work_dir
-
-
-def cleanup_stale_temp_directories(max_age_hours: int = STALE_SESSION_HOURS):
-    """
-    Remove stale session directories from the configured work dir.
-    Intended for lightweight housekeeping on app start.
-    """
-    try:
-        root = _ensure_work_dir()
-        cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
-        for p in root.iterdir():
-            if not p.is_dir() or not p.name.startswith(SESSION_DIR_PREFIX):
-                continue
-            mtime = datetime.utcfromtimestamp(p.stat().st_mtime)
-            if mtime < cutoff:
-                shutil.rmtree(p, ignore_errors=True)
-                logger.info(f"Removed stale temp directory: {p}")
-    except Exception as e:
-        logger.warning(f"Stale temp cleanup failed: {e}")
 
 
 def init_session_state():
@@ -52,11 +22,7 @@ def init_session_state():
 
     if 'temp_dir' not in st.session_state:
         try:
-            cleanup_stale_temp_directories()
-            st.session_state['temp_dir'] = tempfile.mkdtemp(
-                prefix=SESSION_DIR_PREFIX,
-                dir=str(_ensure_work_dir())
-            )
+            st.session_state['temp_dir'] = tempfile.mkdtemp(prefix="wm_pro_v8_")
             logger.info(f"Temp directory created: {st.session_state['temp_dir']}")
         except Exception as e:
             logger.error(f"Failed to create temp dir: {e}")
