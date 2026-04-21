@@ -21,10 +21,8 @@ Watermarker Pro — це швидкий, надійний і зручний ве
 ### Скріншоти
 
 ![Головна сторінка](screenshots/1-main.png)
-![Редактор зображення](screenshots/2-editor.png)
-![Налаштування водяного знака](screenshots/3-watermark-settings.png)
-![Процес обробки](screenshots/4-processing.png)
-![Результат](screenshots/5-result.png)
+![Завантаження файлів](screenshots/2-main.png)
+![Редактор зображення](screenshots/3-main.png)
 
 ### 🚀 Швидкий старт
 
