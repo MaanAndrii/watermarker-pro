@@ -369,8 +369,9 @@ with c_left:
                 if sorted_order != st.session_state['file_order']:
                     st.session_state['file_order'] = sorted_order
                     st.rerun()
-            except ImportError:
-                st.info("Для drag-and-drop встановіть: pip install streamlit-sortables")
+            except (ImportError, Exception):
+                # streamlit-sortables може впасти з StreamlitAPIException
+                # якщо відсутній JS-білд (frontend/build) — наприклад, Python 3.13
                 for i, fname in enumerate(files_names, 1):
                     st.text(f"{i}. {fname}")
 
