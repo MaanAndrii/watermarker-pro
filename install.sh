@@ -22,6 +22,8 @@ APP_HOST="0.0.0.0"
 AUTOSTART=false
 SERVICE_USER=""
 THREADS=2
+GIT_CLONED=false
+REPO_URL="https://github.com/MaanAndrii/watermarker-pro.git"
 
 # =============================================================================
 # КРОК 0 — Банер
@@ -35,14 +37,15 @@ show_banner() {
     echo "  ╚══════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     echo -e "  Цей майстер проведе вас через усі кроки встановлення."
-    echo -e "  Натисніть ${BOLD}Enter${NC} для підтвердження або введіть значення.\n"
+    echo -e "  Натисніть ${BOLD}Enter${NC} для підтвердження або введіть значення."
+    echo -e "  Кроки: перевірка → git clone → директорія → пакети → Python → потоки → автозапуск\n"
 }
 
 # =============================================================================
 # КРОК 1 — Перевірка системи
 # =============================================================================
 check_system() {
-    echo -e "\n${BOLD}══ Крок 1/6: Перевірка системи ══${NC}\n"
+    echo -e "\n${BOLD}══ Крок 1/7: Перевірка системи ══${NC}\n"
 
     # ОС
     if [[ -f /etc/os-release ]]; then
@@ -100,21 +103,107 @@ check_system() {
 }
 
 # =============================================================================
-# КРОК 2 — Вибір директорії
+# КРОК 2 — Клонування з GitHub
+# =============================================================================
+clone_from_git() {
+    echo -e "\n${BOLD}══ Крок 2/7: Отримання проєкту з GitHub ══${NC}\n"
+
+    # Перевірка / встановлення git
+    if ! command -v git &>/dev/null; then
+        warn "git не знайдено."
+        if command -v apt-get &>/dev/null; then
+            read -rp "  Встановити git зараз? [Y/n]: " DO_GIT_INSTALL
+            DO_GIT_INSTALL="${DO_GIT_INSTALL:-Y}"
+            if [[ "$DO_GIT_INSTALL" =~ ^[Yy]$ ]]; then
+                info "Встановлення git..."
+                sudo apt-get install -y git -qq
+                ok "git встановлено: $(git --version)"
+            else
+                warn "Клонування пропущено — git не доступний."
+                return
+            fi
+        else
+            warn "Встановіть git вручну та перезапустіть скрипт."
+            return
+        fi
+    else
+        ok "git $(git --version | awk '{print $3}')"
+    fi
+
+    echo ""
+    echo -e "  Звідки взяти файли Watermarker Pro?"
+    echo -e "    1) Клонувати з GitHub  ${BOLD}← рекомендовано${NC}"
+    echo -e "    2) Файли вже є на цьому пристрої"
+    read -rp "  Ваш вибір [1]: " GIT_CHOICE
+    GIT_CHOICE="${GIT_CHOICE:-1}"
+
+    if [[ "$GIT_CHOICE" != "1" ]]; then
+        info "Клонування пропущено. Файли будуть знайдені на кроці 3."
+        return
+    fi
+
+    # URL репозиторію
+    echo ""
+    read -rp "  URL репозиторію [${REPO_URL}]: " INPUT_URL
+    REPO_URL="${INPUT_URL:-$REPO_URL}"
+
+    # Гілка
+    read -rp "  Гілка [main]: " INPUT_BRANCH
+    GIT_BRANCH="${INPUT_BRANCH:-main}"
+
+    # Куди клонувати
+    DEFAULT_DEST="${HOME}/watermarker-pro"
+    read -rp "  Куди зберегти проєкт [${DEFAULT_DEST}]: " INPUT_DEST
+    CLONE_DEST="${INPUT_DEST:-$DEFAULT_DEST}"
+    CLONE_DEST="${CLONE_DEST%/}"
+
+    if [[ -d "${CLONE_DEST}/.git" ]]; then
+        warn "Репозиторій вже існує в '${CLONE_DEST}'."
+        read -rp "  Оновити (git pull)? [Y/n]: " DO_PULL
+        DO_PULL="${DO_PULL:-Y}"
+        if [[ "$DO_PULL" =~ ^[Yy]$ ]]; then
+            info "Оновлення репозиторію..."
+            git -C "$CLONE_DEST" fetch origin "$GIT_BRANCH" 2>&1 | tail -3
+            git -C "$CLONE_DEST" checkout "$GIT_BRANCH" 2>/dev/null || true
+            git -C "$CLONE_DEST" pull origin "$GIT_BRANCH"
+            ok "Репозиторій оновлено."
+        else
+            info "Використовуємо наявний репозиторій без оновлення."
+        fi
+    else
+        info "Клонування ${REPO_URL} (гілка: ${GIT_BRANCH})..."
+        git clone --branch "$GIT_BRANCH" --depth 1 "$REPO_URL" "$CLONE_DEST"
+        ok "Клоновано до: ${CLONE_DEST}"
+    fi
+
+    [[ -f "${CLONE_DEST}/web_app.py" ]] || die "Клонування завершено, але web_app.py не знайдено в '${CLONE_DEST}'"
+
+    INSTALL_DIR="$CLONE_DEST"
+    GIT_CLONED=true
+    ok "Директорія проєкту: ${INSTALL_DIR}"
+}
+
+# =============================================================================
+# КРОК 3 — Вибір директорії (якщо не клоновано)
 # =============================================================================
 choose_directory() {
-    echo -e "\n${BOLD}══ Крок 2/6: Директорія встановлення ══${NC}\n"
+    echo -e "\n${BOLD}══ Крок 3/7: Директорія та мережеві налаштування ══${NC}\n"
 
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    DEFAULT_DIR="$SCRIPT_DIR"
+    # Якщо проєкт вже клоновано — тільки підтвердити директорію
+    if $GIT_CLONED; then
+        ok "Директорія вже визначена: ${INSTALL_DIR}"
+    else
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        DEFAULT_DIR="$SCRIPT_DIR"
 
-    echo -e "  Де знаходяться файли Watermarker Pro?"
-    read -rp "  Директорія [${DEFAULT_DIR}]: " INSTALL_DIR
-    INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
-    INSTALL_DIR="${INSTALL_DIR%/}"
+        echo -e "  Де знаходяться файли Watermarker Pro?"
+        read -rp "  Директорія [${DEFAULT_DIR}]: " INSTALL_DIR
+        INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
+        INSTALL_DIR="${INSTALL_DIR%/}"
 
-    [[ -f "${INSTALL_DIR}/web_app.py" ]] || die "Файл web_app.py не знайдено в '${INSTALL_DIR}'"
-    ok "Директорія проєкту: ${INSTALL_DIR}"
+        [[ -f "${INSTALL_DIR}/web_app.py" ]] || die "Файл web_app.py не знайдено в '${INSTALL_DIR}'"
+        ok "Директорія проєкту: ${INSTALL_DIR}"
+    fi
 
     VENV_DIR="${INSTALL_DIR}/venv"
     ok "Віртуальне середовище: ${VENV_DIR}"
@@ -141,10 +230,10 @@ choose_directory() {
 }
 
 # =============================================================================
-# КРОК 3 — Системні пакети
+# КРОК 4 — Системні пакети
 # =============================================================================
 install_system_packages() {
-    echo -e "\n${BOLD}══ Крок 3/6: Системні пакети ══${NC}\n"
+    echo -e "\n${BOLD}══ Крок 4/7: Системні пакети ══${NC}\n"
 
     if ! command -v apt-get &>/dev/null; then
         warn "apt-get не знайдено. Пропускаємо встановлення системних пакетів."
@@ -184,10 +273,10 @@ install_system_packages() {
 }
 
 # =============================================================================
-# КРОК 4 — Python-середовище та залежності
+# КРОК 5 — Python-середовище та залежності
 # =============================================================================
 install_python_deps() {
-    echo -e "\n${BOLD}══ Крок 4/6: Python-залежності ══${NC}\n"
+    echo -e "\n${BOLD}══ Крок 5/7: Python-залежності ══${NC}\n"
 
     # Створення venv
     if [[ -d "$VENV_DIR" ]]; then
@@ -251,10 +340,10 @@ install_python_deps() {
 }
 
 # =============================================================================
-# КРОК 5 — Кількість потоків
+# КРОК 6 — Кількість потоків
 # =============================================================================
 configure_threads() {
-    echo -e "\n${BOLD}══ Крок 5/6: Налаштування продуктивності ══${NC}\n"
+    echo -e "\n${BOLD}══ Крок 6/7: Налаштування продуктивності ══${NC}\n"
 
     CPU_CORES=$(nproc 2>/dev/null || echo 4)
     RECOMMENDED=$(( CPU_CORES > 4 ? 4 : CPU_CORES ))
@@ -274,10 +363,10 @@ configure_threads() {
 }
 
 # =============================================================================
-# КРОК 6 — Автозапуск (systemd)
+# КРОК 7 — Автозапуск (systemd)
 # =============================================================================
 setup_autostart() {
-    echo -e "\n${BOLD}══ Крок 6/6: Автозапуск при старті системи ══${NC}\n"
+    echo -e "\n${BOLD}══ Крок 7/7: Автозапуск при старті системи ══${NC}\n"
 
     if ! command -v systemctl &>/dev/null; then
         warn "systemd не знайдено. Пропускаємо налаштування автозапуску."
@@ -408,6 +497,7 @@ show_summary() {
 main() {
     show_banner
     check_system
+    clone_from_git
     choose_directory
     install_system_packages
     install_python_deps
