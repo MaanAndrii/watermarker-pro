@@ -46,11 +46,10 @@ TRANSLATIONS = {
         "lbl_color": "Колір",
         "msg_preset_logo_active": "ℹ️ Використовується логотип з пресету",
         "msg_no_fonts": "⚠️ Шрифти не знайдено в assets/fonts",
-        "msg_svg_no_cairosvg": "⚠️ SVG вотермарки потребують: pip install cairosvg",
+        "msg_svg_no_cairosvg": "⚠️ SVG вотермарки потребують: pip install resvg-py",
 
         # Watermark Settings
         "lbl_pos": "Позиція",
-        "opt_pos_tile": "Замощення (Паттерн)",
         "lbl_scale": "Розмір / Масштаб (%)",
         "lbl_opacity": "Прозорість",
         "lbl_gap": "Проміжок (px)",
@@ -84,7 +83,6 @@ TRANSLATIONS = {
         "grid_delete": "🗑️ Видалити",
         "btn_selected": "✅ Обрано",
         "btn_select": "⬜ Обрати",
-        "warn_no_files": "⚠️ Спочатку оберіть файли!",
         "btn_clear_workspace": "♻️ Очистити все",
         "expander_add_files": "📤 Додати файли",
         "stat_files_selected": "Файлів: {} | Обрано: {}",
@@ -103,7 +101,6 @@ TRANSLATIONS = {
         "prev_placeholder": "Оберіть файл (✅) для перегляду",
         "stat_res": "Роздільна здатність",
         "stat_size": "Розмір файлу",
-        "btn_generate_preview": "🔄 Оновити перегляд",
         "msg_preview_error": "❌ Помилка генерації перегляду",
 
         # Before/After comparison
@@ -117,7 +114,6 @@ TRANSLATIONS = {
         "stats_total_before": "Загальний розмір (до)",
         "stats_total_after": "Загальний розмір (після)",
         "stats_avg_compression": "Середня компресія",
-        "stats_resolution_change": "Зміна роздільної здатності",
 
         # Editor
         "btn_open_editor": "🛠 Редагувати (Crop/Rotate)",
@@ -140,7 +136,7 @@ TRANSLATIONS = {
 - 📋 Batch rename preview (таблиця до обробки)
 - 🔍 Порівняння до/після зі слайдером
 - 🔀 Drag-and-drop порядок файлів
-- 🖼️ SVG як вотермарка (cairosvg)
+- 🖼️ SVG як вотермарка (resvg-py)
 - 🧹 Розподіл utils.py на session/preset/file_manager
 - 🔒 LRU-кеш шрифтів з обмеженням
 - 📊 Зведена статистика після batch
@@ -196,11 +192,10 @@ TRANSLATIONS = {
         "lbl_color": "Color",
         "msg_preset_logo_active": "ℹ️ Using logo from preset",
         "msg_no_fonts": "⚠️ No fonts found in assets/fonts",
-        "msg_svg_no_cairosvg": "⚠️ SVG watermarks require: pip install cairosvg",
+        "msg_svg_no_cairosvg": "⚠️ SVG watermarks require: pip install resvg-py",
 
         # Watermark Settings
         "lbl_pos": "Position",
-        "opt_pos_tile": "Tiled (Pattern)",
         "lbl_scale": "Size / Scale (%)",
         "lbl_opacity": "Opacity",
         "lbl_gap": "Gap (px)",
@@ -234,7 +229,6 @@ TRANSLATIONS = {
         "grid_delete": "🗑️ Delete",
         "btn_selected": "✅ Selected",
         "btn_select": "⬜ Select",
-        "warn_no_files": "⚠️ Select files first!",
         "btn_clear_workspace": "♻️ Clear Workspace",
         "expander_add_files": "📤 Add Files",
         "stat_files_selected": "Files: {} | Selected: {}",
@@ -253,7 +247,6 @@ TRANSLATIONS = {
         "prev_placeholder": "Select a file (✅) to preview",
         "stat_res": "Resolution",
         "stat_size": "File Size",
-        "btn_generate_preview": "🔄 Refresh Preview",
         "msg_preview_error": "❌ Preview generation error",
 
         # Before/After comparison
@@ -267,7 +260,6 @@ TRANSLATIONS = {
         "stats_total_before": "Total size (before)",
         "stats_total_after": "Total size (after)",
         "stats_avg_compression": "Avg compression",
-        "stats_resolution_change": "Resolution change",
 
         # Editor
         "btn_open_editor": "🛠 Edit (Crop/Rotate)",
@@ -290,7 +282,7 @@ TRANSLATIONS = {
 - 📋 Batch rename preview table
 - 🔍 Before/After slider comparison
 - 🔀 Drag-and-drop file ordering
-- 🖼️ SVG watermark support (cairosvg)
+- 🖼️ SVG watermark support (resvg-py)
 - 🧹 utils.py split into session/preset/file_manager
 - 🔒 LRU font cache with size limit
 - 📊 Batch processing summary stats

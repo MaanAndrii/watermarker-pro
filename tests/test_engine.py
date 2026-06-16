@@ -4,6 +4,7 @@ Watermarker Pro v7.0 - Unit Tests
 Test suite for engine module
 """
 
+import io
 import pytest
 import os
 import tempfile

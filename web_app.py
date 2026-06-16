@@ -19,13 +19,15 @@ Watermarker Pro v8.0 - Main Application
 - files_map більше не перевизначається у правій колонці
 """
 
-import streamlit as st
+import atexit
 import io
 import os
+import shutil
 import zipfile
 import concurrent.futures
 import gc
 import pandas as pd
+import streamlit as st
 from PIL import Image
 
 import config
@@ -474,7 +476,8 @@ with c_left:
                         if token.is_cancelled():
                             cancelled = True
                             for pending in futures:
-                                pending.cancel()
+                                if not pending.done():
+                                    pending.cancel()
                             break
 
                         status_text.text(f"{T['msg_processing']} {fname}")
@@ -495,9 +498,11 @@ with c_left:
                         progress.progress((i + 1) / len(process_list))
 
             if cancelled:
+                progress.empty()
                 cancel_info.warning(T['msg_cancelled'])
                 logger.info(f"Batch cancelled. Processed {len(results)}/{len(process_list)}")
             else:
+                progress.progress(1.0)
                 status_text.empty()
                 st.toast(T['msg_done'], icon='🎉')
                 logger.info(f"Batch completed: {len(results)} files")
@@ -574,10 +579,14 @@ with c_left:
 with c_right:
     st.subheader(T['prev_header'])
 
-    selected_list = list(st.session_state['selected_files'])
-    target_file   = selected_list[-1] if selected_list else None
+    # Беремо останній у порядку file_order серед вибраних (set не має порядку)
+    _selected_set = st.session_state['selected_files']
+    target_file = next(
+        (f for f in reversed(st.session_state['file_order']) if f in _selected_set),
+        None
+    )
     # Використовуємо вже визначений files_map — не перевизначаємо
-    files_map     = st.session_state['file_cache']
+    files_map = st.session_state['file_cache']
 
     with st.container(border=True):
         if target_file and target_file in files_map:
@@ -657,19 +666,23 @@ with c_right:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLEANUP ON EXIT
+# st.session_state недоступний при виході процесу, тому захоплюємо шлях зараз
+# і передаємо у closure. _registered_dirs запобігає дублюванню при реранах.
 # ─────────────────────────────────────────────────────────────────────────────
-import atexit
+_registered_dirs: set = set()
 
 
-def _cleanup():
-    try:
-        temp_dir = st.session_state.get('temp_dir')
-        if temp_dir and os.path.exists(temp_dir):
-            import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            logger.info("Exit cleanup completed")
-    except Exception as e:
-        logger.error(f"Exit cleanup failed: {e}")
+def _make_cleanup(temp_dir: str):
+    def _cleanup():
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
+    return _cleanup
 
 
-atexit.register(_cleanup)
+_current_temp_dir = st.session_state.get('temp_dir')
+if _current_temp_dir and _current_temp_dir not in _registered_dirs:
+    _registered_dirs.add(_current_temp_dir)
+    atexit.register(_make_cleanup(_current_temp_dir))

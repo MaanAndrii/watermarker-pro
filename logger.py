@@ -12,15 +12,15 @@ import config
 
 class WatermarkerLogger:
     """Centralized logger for the application"""
-    
-    _instance: Optional[logging.Logger] = None
-    
+
+    _loggers: dict = {}
+
     @classmethod
     def get_logger(cls, name: str = "watermarker") -> logging.Logger:
-        """Get or create logger instance"""
-        if cls._instance is None:
-            cls._instance = cls._setup_logger(name)
-        return cls._instance
+        """Get or create a named logger instance (per-name cache)"""
+        if name not in cls._loggers:
+            cls._loggers[name] = cls._setup_logger(name)
+        return cls._loggers[name]
     
     @classmethod
     def _setup_logger(cls, name: str) -> logging.Logger:

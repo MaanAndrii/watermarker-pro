@@ -116,7 +116,7 @@ def sanitize_filename(filename: str) -> str:
         Safe filename
     """
     if not filename:
-        return "unnamed"
+        return "unnamed.jpg"
 
     filename = Path(filename).name
     filename = re.sub(r'[<>:"|?\*\x00-\x1f]', '', filename)
