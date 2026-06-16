@@ -24,8 +24,7 @@ from cachetools import LRUCache
 import config
 from logger import get_logger
 from validators import (
-    validate_image_file, validate_dimensions,
-    validate_scale_factor, safe_divide, validate_color_hex
+    validate_image_file, validate_dimensions, validate_color_hex
 )
 
 logger = get_logger(__name__)
@@ -188,42 +187,6 @@ def remove_thumbnail(file_path: str) -> bool:
         return False
 
 
-# === ROTATION ===
-
-def rotate_image_file(file_path: str, angle: int) -> bool:
-    """
-    Rotate image file permanently.
-    HEIC input: зберігає як JPEG поруч (HEIC write = платний кодек).
-    """
-    try:
-        validate_image_file(file_path)
-
-        ext = os.path.splitext(file_path)[1].lower()
-        is_heic = ext in ('.heic', '.heif')
-
-        with Image.open(file_path) as img_temp:
-            img = ImageOps.exif_transpose(img_temp)
-            exif_data = img.info.get('exif')
-            rotated = img.rotate(-angle, expand=True, resample=Image.BICUBIC)
-
-        if is_heic:
-            out_path = os.path.splitext(file_path)[0] + "_rotated.jpg"
-            rotated.convert('RGB').save(out_path, "JPEG", quality=95, subsampling=0)
-            logger.info(f"HEIC rotated and saved as JPEG: {out_path}")
-        else:
-            save_kwargs = {"quality": 95, "subsampling": 0}
-            if exif_data:
-                save_kwargs['exif'] = exif_data
-            rotated.save(file_path, **save_kwargs)
-
-        remove_thumbnail(file_path)
-        return True
-
-    except Exception as e:
-        logger.error(f"Rotation failed: {e}")
-        return False
-
-
 # === SVG WATERMARK ===
 
 def load_svg_watermark(svg_bytes: bytes, target_width: int = 500) -> Optional[Image.Image]:
@@ -296,28 +259,13 @@ def get_cached_font(font_path: str, size: int) -> ImageFont.FreeTypeFont:
     with _font_cache_lock:
         if cache_key in _font_cache:
             return _font_cache[cache_key]
-
-    try:
-        font = ImageFont.truetype(font_path, size)
-    except Exception as e:
-        logger.warning(f"Font loading failed ({font_path}, {size}px): {e}")
-        font = ImageFont.load_default()
-
-    with _font_cache_lock:
+        try:
+            font = ImageFont.truetype(font_path, size)
+        except Exception as e:
+            logger.warning(f"Font loading failed ({font_path}, {size}px): {e}")
+            font = ImageFont.load_default()
         _font_cache[cache_key] = font
-
-    return font
-
-
-def get_font_cache_info() -> Dict:
-    """Повертає статистику кешу шрифтів"""
-    with _font_cache_lock:
-        return {
-            "size": len(_font_cache),
-            "maxsize": _font_cache.maxsize,
-            "hits": getattr(_font_cache, 'hits', 'n/a'),
-            "misses": getattr(_font_cache, 'misses', 'n/a'),
-        }
+        return font
 
 
 # === TEXT WATERMARK ===
@@ -396,8 +344,8 @@ def process_image(
         validate_image_file(file_path)
 
         with Image.open(file_path) as img_temp:
+            exif_data = img_temp.info.get('exif')  # читаємо до transpose — info після порожній
             img = ImageOps.exif_transpose(img_temp)
-            exif_data = img.info.get('exif')
             orig_w, orig_h = img.size
             orig_size = os.path.getsize(file_path)
             img = img.convert("RGBA")
@@ -542,8 +490,6 @@ def _export_image(
         bg = Image.new("RGB", img.size, (255, 255, 255))
         bg.paste(img, mask=img.split()[3])
         img = bg
-    elif fmt == "RGB":
-        img = img.convert("RGB")
 
     buf = io.BytesIO()
     sk: Dict = {"format": fmt}

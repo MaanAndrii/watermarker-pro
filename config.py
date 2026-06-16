@@ -91,7 +91,6 @@ CORNER_SETTINGS = {
 MIN_THREADS = 1
 MAX_THREADS = 8
 DEFAULT_THREADS = 2
-CACHE_TTL = 300  # seconds
 
 # === PATHS ===
 def get_project_root() -> Path:

@@ -87,63 +87,6 @@ def create_proxy_image(
         logger.error(f"Proxy creation failed: {e}")
         return img, 1.0
 
-def get_max_box(
-    img_w: int,
-    img_h: int,
-    aspect_data: Optional[Tuple[int, int]]
-) -> Tuple[int, int, int, int]:
-    """
-    Calculate maximum crop box for given aspect ratio
-    
-    Args:
-        img_w: Image width
-        img_h: Image height
-        aspect_data: Aspect ratio tuple (w, h) or None
-        
-    Returns:
-        Crop box tuple (left, top, width, height)
-    """
-    try:
-        if aspect_data is None:
-            pad = 10
-            return (
-                pad,
-                pad,
-                max(10, img_w - 2*pad),
-                max(10, img_h - 2*pad)
-            )
-        
-        # Calculate ratio
-        ratio_w, ratio_h = aspect_data
-        if ratio_w == 0 or ratio_h == 0:
-            logger.warning(f"Invalid aspect ratio: {aspect_data}")
-            return (0, 0, img_w, img_h)
-        
-        ratio_val = ratio_w / ratio_h
-        
-        # Try to fit by width
-        try_w = img_w
-        try_h = int(try_w / ratio_val)
-        
-        if try_h > img_h:
-            # Doesn't fit, try by height
-            try_h = img_h
-            try_w = int(try_h * ratio_val)
-        
-        # Ensure positive dimensions
-        try_w = max(10, min(try_w, img_w))
-        try_h = max(10, min(try_h, img_h))
-        
-        # Center the box
-        left = (img_w - try_w) // 2
-        top = (img_h - try_h) // 2
-        
-        return (left, top, try_w, try_h)
-    
-    except Exception as e:
-        logger.error(f"Max box calculation failed: {e}")
-        return (0, 0, img_w, img_h)
-
 @st.dialog("🛠 Editor", width="large")
 def open_editor_dialog(fpath: str, T: dict):
     """
@@ -300,16 +243,16 @@ def open_editor_dialog(fpath: str, T: dict):
             ):
                 try:
                     if crop_box:
-                        # Crop image
                         final_image = img_full.crop(crop_box)
-                        
-                        # Save with high quality
-                        final_image.save(
-                            fpath,
-                            quality=95,
-                            subsampling=0,
-                            optimize=True
-                        )
+
+                        # Передаємо лише аргументи, що підтримує конкретний формат
+                        _ext = os.path.splitext(fpath)[1].lower()
+                        if _ext in ('.jpg', '.jpeg'):
+                            final_image.save(fpath, quality=95, subsampling=0, optimize=True)
+                        elif _ext == '.webp':
+                            final_image.save(fpath, quality=95, optimize=True)
+                        else:  # PNG та інші
+                            final_image.save(fpath, optimize=True)
                         
                         # Remove thumbnail cache
                         thumb_path = f"{fpath}.thumb.jpg"
@@ -329,7 +272,6 @@ def open_editor_dialog(fpath: str, T: dict):
                             if k in st.session_state:
                                 del st.session_state[k]
                         
-                        st.session_state['close_editor'] = True
                         st.toast(T.get('msg_edit_saved', '✅ Changes saved!'))
                         logger.info(f"Image edited and saved: {fpath}")
                         st.rerun()
