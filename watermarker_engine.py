@@ -394,6 +394,7 @@ def process_image(
     quality: int,
     cancel_token: Optional[CancellationToken] = None,
     preserve_exif: bool = True,
+    wm_cache: Optional[Dict] = None,
 ) -> Tuple[bytes, Dict]:
     """
     Process image with watermark and resize.
@@ -434,7 +435,7 @@ def process_image(
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
         if wm_obj:
-            img = _apply_watermark(img, wm_obj, resize_config)
+            img = _apply_watermark(img, wm_obj, resize_config, wm_cache)
 
         result_bytes = _export_image(img, output_fmt, quality, exif_data if preserve_exif else None)
 
@@ -476,26 +477,42 @@ def _calculate_resize(orig_w: int, orig_h: int, config_dict: Dict) -> Tuple[int,
     return nw, nh, sf
 
 
-def _apply_watermark(img: Image.Image, wm_obj: Image.Image, config_dict: Dict) -> Image.Image:
-    """Scale and apply watermark"""
+def _apply_watermark(
+    img: Image.Image,
+    wm_obj: Image.Image,
+    config_dict: Dict,
+    wm_cache: Optional[Dict] = None,
+) -> Image.Image:
+    """Scale, transform, and apply watermark.
+
+    wm_cache — optional dict shared across a batch run. Keyed by
+    (target_w, target_h, gradient_mode, angle); avoids repeating the
+    expensive LANCZOS resize + gradient + rotation for every image when
+    settings are identical. Thread-safe: CPython GIL protects dict ops;
+    benign TOCTOU race only causes harmless double-compute on first hit.
+    """
     try:
         nw, nh = img.size
-        scale = max(0.01, min(0.9, config_dict.get('wm_scale', 0.15)))
-        pos = config_dict.get('wm_position', 'bottom-right')
-        angle = config_dict.get('wm_angle', 0)
+        scale         = max(0.01, min(0.9, config_dict.get('wm_scale', 0.15)))
+        pos           = config_dict.get('wm_position', 'bottom-right')
+        angle         = config_dict.get('wm_angle', 0)
+        gradient_mode = config_dict.get('wm_gradient', 'none')
 
         wm_w_target = max(10, int(nw * scale))
-        w_ratio = wm_w_target / wm_obj.width
-        wm_h_target = max(10, int(wm_obj.height * w_ratio))
+        wm_h_target = max(10, int(wm_obj.height * wm_w_target / wm_obj.width))
 
-        wm_res = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
+        cache_key = (wm_w_target, wm_h_target, gradient_mode, angle)
 
-        gradient_mode = config_dict.get('wm_gradient', 'none')
-        if gradient_mode != 'none':
-            wm_res = apply_wm_gradient(wm_res, gradient_mode)
-
-        if angle != 0:
-            wm_res = wm_res.rotate(angle, expand=True, resample=Image.BICUBIC)
+        if wm_cache is not None and cache_key in wm_cache:
+            wm_res = wm_cache[cache_key]
+        else:
+            wm_res = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
+            if gradient_mode != 'none':
+                wm_res = apply_wm_gradient(wm_res, gradient_mode)
+            if angle != 0:
+                wm_res = wm_res.rotate(angle, expand=True, resample=Image.BICUBIC)
+            if wm_cache is not None:
+                wm_cache[cache_key] = wm_res
 
         if pos == 'tiled':
             return _apply_tiled_watermark(img, wm_res, config_dict)

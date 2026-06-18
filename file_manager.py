@@ -61,9 +61,11 @@ def cleanup_temp_directory():
         logger.error(f"Cleanup failed: {e}")
 
 
+@st.cache_data(ttl=3600)
 def get_available_fonts() -> List[str]:
     """
     Get sorted list of TTF/OTF font filenames from assets/fonts/.
+    Result cached for 1 hour — font directory changes rarely.
 
     Returns:
         List of font filenames
