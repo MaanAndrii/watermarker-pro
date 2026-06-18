@@ -69,7 +69,9 @@ DEFAULT_SETTINGS = {
     'naming_mode': 'Keep Original',
     'naming_prefix': '',
     'font_name': None,
-    'preset_wm_bytes': None
+    'preset_wm_bytes': None,
+    'preserve_exif': True,
+    'wm_gradient': 'none',
 }
 
 # === POSITION PRESETS ===

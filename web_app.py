@@ -116,6 +116,11 @@ with st.sidebar:
             key='naming_mode_key'
         )
         st.text_input(T['lbl_prefix'], placeholder="img", key='naming_prefix_key')
+        st.checkbox(
+            T['chk_preserve_exif'],
+            key='preserve_exif_key',
+            help=T['help_preserve_exif']
+        )
 
     # GEOMETRY
     with st.expander(T['sec_geo'], expanded=True):
@@ -192,6 +197,18 @@ with st.sidebar:
         else:
             st.slider(T['lbl_margin'], 0, 100, key='wm_margin_key')
         st.slider(T['lbl_angle'], -180, 180, key='wm_angle_key')
+        _gradient_labels = {
+            'none':       T['wm_gradient_none'],
+            'radial':     T['wm_gradient_radial'],
+            'horizontal': T['wm_gradient_h'],
+            'vertical':   T['wm_gradient_v'],
+        }
+        st.selectbox(
+            T['lbl_wm_gradient'],
+            list(_gradient_labels.keys()),
+            format_func=lambda x: _gradient_labels[x],
+            key='wm_gradient_key'
+        )
 
     # PERFORMANCE
     with st.expander(T['sec_perf'], expanded=False):
@@ -465,7 +482,8 @@ with c_left:
                         fpath, new_fname, wm_obj, resize_cfg,
                         st.session_state['out_fmt_key'],
                         st.session_state.get('out_quality_key', 80),  # .get() — PNG не має слайдера
-                        token
+                        token,
+                        st.session_state.get('preserve_exif_key', True),
                     )
                     futures[future] = fname
 
@@ -602,28 +620,42 @@ with c_right:
 
             st.divider()
 
-            # ── PREVIEW + BEFORE/AFTER ────────────────────────────────────
+            # ── PREVIEW + BEFORE/AFTER (з кешуванням) ────────────────────
             try:
                 selected_font = st.session_state.get('font_name_key')
-                # wm_file з session_state — не залежимо від scope sidebar
                 _wm_file_preview = st.session_state.get('wm_uploader_obj')
                 wm_obj     = utils.prepare_watermark_object(_wm_file_preview, selected_font)
                 resize_cfg = utils.get_resize_config()
+                out_fmt    = st.session_state['out_fmt_key']
+                quality    = st.session_state.get('out_quality_key', 80)
 
                 preview_fname = engine.generate_filename(
                     fpath,
                     st.session_state['naming_mode_key'],
                     st.session_state['naming_prefix_key'],
-                    st.session_state['out_fmt_key'].lower(),
+                    out_fmt.lower(),
                     1
                 )
 
-                with st.spinner(T['msg_processing']):
-                    prev_bytes, stats = engine.process_image(
-                        fpath, preview_fname, wm_obj, resize_cfg,
-                        st.session_state['out_fmt_key'],
-                        st.session_state.get('out_quality_key', 80)
-                    )
+                # Cache lookup
+                cache_key     = utils.get_preview_cache_key(fpath, _wm_file_preview, resize_cfg, out_fmt, quality)
+                preview_cache = st.session_state.get('preview_cache', {})
+
+                if cache_key and cache_key in preview_cache:
+                    prev_bytes, stats = preview_cache[cache_key]
+                    st.caption(T['prev_cached'])
+                else:
+                    with st.spinner(T['msg_processing']):
+                        prev_bytes, stats = engine.process_image(
+                            fpath, preview_fname, wm_obj, resize_cfg,
+                            out_fmt, quality,
+                            preserve_exif=st.session_state.get('preserve_exif_key', True),
+                        )
+                    if cache_key:
+                        if len(preview_cache) >= 5:
+                            preview_cache.pop(next(iter(preview_cache)))
+                        preview_cache[cache_key] = (prev_bytes, stats)
+                        st.session_state['preview_cache'] = preview_cache
 
                 # Before / After
                 st.subheader(T['sec_compare'])
@@ -655,13 +687,51 @@ with c_right:
                 logger.error(f"Preview generation failed: {e}", exc_info=True)
 
         else:
-            st.markdown(
-                f"""<div class="preview-placeholder">
-                    <span class="preview-icon">🖼️</span>
-                    <p>{T['prev_placeholder']}</p>
-                </div>""",
-                unsafe_allow_html=True
+            # ── DEMO PREVIEW (вотермарка налаштована, але файл не обрано) ──
+            _wm_file_demo = st.session_state.get('wm_uploader_obj')
+            _has_wm = (
+                _wm_file_demo is not None
+                or st.session_state.get('preset_wm_bytes_key')
+                or st.session_state.get('wm_text_key', '').strip()
             )
+
+            if _has_wm:
+                try:
+                    st.caption(T['prev_demo_hint'])
+                    temp_dir  = st.session_state.get('temp_dir', '')
+                    demo_path = os.path.join(temp_dir, '__demo__.jpg')
+                    if not os.path.exists(demo_path):
+                        engine.create_demo_image(demo_path)
+
+                    selected_font_demo = st.session_state.get('font_name_key')
+                    wm_obj_demo        = utils.prepare_watermark_object(_wm_file_demo, selected_font_demo)
+                    resize_cfg_demo    = utils.get_resize_config()
+                    resize_cfg_demo['enabled'] = False  # demo is always shown at native size
+
+                    with st.spinner(T['msg_processing']):
+                        demo_bytes, _ = engine.process_image(
+                            demo_path, 'demo.jpg', wm_obj_demo, resize_cfg_demo,
+                            'JPEG', 80, preserve_exif=False,
+                        )
+                    st.image(demo_bytes, use_container_width=True)
+
+                except Exception as e:
+                    logger.error(f"Demo preview failed: {e}", exc_info=True)
+                    st.markdown(
+                        f"""<div class="preview-placeholder">
+                            <span class="preview-icon">🖼️</span>
+                            <p>{T['prev_placeholder']}</p>
+                        </div>""",
+                        unsafe_allow_html=True
+                    )
+            else:
+                st.markdown(
+                    f"""<div class="preview-placeholder">
+                        <span class="preview-icon">🖼️</span>
+                        <p>{T['prev_placeholder']}</p>
+                    </div>""",
+                    unsafe_allow_html=True
+                )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
