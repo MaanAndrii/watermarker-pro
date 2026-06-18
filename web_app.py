@@ -26,6 +26,7 @@ import shutil
 import zipfile
 import concurrent.futures
 import gc
+from typing import Dict
 import pandas as pd
 import streamlit as st
 from PIL import Image
@@ -462,6 +463,9 @@ with c_left:
             results    = []
             report     = []
             zip_buffer = io.BytesIO()
+            # Shared WM resize cache: avoid LANCZOS + gradient + rotate per image
+            # when all images share the same output size (common with Max Side resize).
+            wm_cache: Dict = {}
             cancelled  = False
 
             logger.info(f"Starting batch processing: {len(process_list)} files")
@@ -484,6 +488,7 @@ with c_left:
                         st.session_state.get('out_quality_key', 80),  # .get() — PNG не має слайдера
                         token,
                         st.session_state.get('preserve_exif_key', True),
+                        wm_cache,
                     )
                     futures[future] = fname
 
