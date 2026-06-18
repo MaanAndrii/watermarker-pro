@@ -40,6 +40,7 @@ def init_session_state():
         'results': None,
         'cancel_token': None,       # CancellationToken | None
         'processing_active': False, # True поки йде batch
+        'preview_cache': {},        # cache_key -> (bytes, stats), max 5 entries
     }
 
     for key, value in defaults.items():

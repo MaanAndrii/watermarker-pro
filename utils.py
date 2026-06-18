@@ -31,6 +31,9 @@ from file_manager import (
 
 # === CSS INJECTION ===
 
+import hashlib
+import json
+import os
 import streamlit as st
 
 
@@ -132,6 +135,42 @@ def prepare_watermark_object(wm_file, selected_font_name: Optional[str]) -> Opti
         raise
 
 
+def get_preview_cache_key(
+    fpath: str,
+    wm_file_obj,
+    resize_cfg: Dict,
+    output_fmt: str,
+    quality: int,
+) -> str:
+    """Return an MD5 key that uniquely identifies the current preview settings."""
+    try:
+        mtime = str(os.path.getmtime(fpath)) if os.path.exists(fpath) else '0'
+
+        if wm_file_obj is not None:
+            raw = wm_file_obj.getvalue()
+            wm_hash = hashlib.md5(raw[:2048] + len(raw).to_bytes(8, 'big')).hexdigest()[:10]
+        else:
+            wm_hash = 'none'
+
+        key_parts = {
+            'path': fpath,
+            'mtime': mtime,
+            'wm': wm_hash,
+            'wm_text': st.session_state.get('wm_text_key', ''),
+            'wm_color': st.session_state.get('wm_text_color_key', ''),
+            'font': st.session_state.get('font_name_key', ''),
+            'opacity': st.session_state.get('wm_opacity_key', 1.0),
+            'cfg': resize_cfg,
+            'fmt': output_fmt,
+            'quality': quality,
+        }
+        return hashlib.md5(
+            json.dumps(key_parts, sort_keys=True, default=str).encode()
+        ).hexdigest()
+    except Exception:
+        return ''
+
+
 def get_resize_config() -> Dict:
     """Get current resize and watermark configuration dict"""
     wm_pos = st.session_state.get('wm_pos_key', 'bottom-right')
@@ -144,4 +183,5 @@ def get_resize_config() -> Dict:
         'wm_gap':     st.session_state.get('wm_gap_key', 30) if wm_pos == 'tiled' else 0,
         'wm_position': wm_pos,
         'wm_angle':   st.session_state.get('wm_angle_key', 0),
+        'wm_gradient': st.session_state.get('wm_gradient_key', 'none'),
     }

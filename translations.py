@@ -26,6 +26,8 @@ TRANSLATIONS = {
         "lbl_quality": "Якість (%)",
         "lbl_naming": "Іменування файлів",
         "lbl_prefix": "Префікс файлу",
+        "chk_preserve_exif": "Зберігати EXIF",
+        "help_preserve_exif": "Зберігати метадані камери (GPS, дата, ISO) у вихідному файлі",
 
         # Geometry
         "sec_geo": "2️⃣ Геометрія (Ресайз)",
@@ -55,6 +57,11 @@ TRANSLATIONS = {
         "lbl_gap": "Проміжок (px)",
         "lbl_margin": "Відступ (px)",
         "lbl_angle": "Кут нахилу (°)",
+        "lbl_wm_gradient": "Градієнт прозорості",
+        "wm_gradient_none": "Вимкнено",
+        "wm_gradient_radial": "Радіальний (м'які краї)",
+        "wm_gradient_h": "Горизонтальний (ліво→право)",
+        "wm_gradient_v": "Вертикальний (верх→низ)",
 
         # Performance
         "sec_perf": "⚙️ Продуктивність",
@@ -99,6 +106,8 @@ TRANSLATIONS = {
         # Preview
         "prev_header": "👁️ Живий перегляд",
         "prev_placeholder": "Оберіть файл (✅) для перегляду",
+        "prev_demo_hint": "Перегляд вотермарки на тестовому зображенні",
+        "prev_cached": "⚡ З кешу",
         "stat_res": "Роздільна здатність",
         "stat_size": "Розмір файлу",
         "msg_preview_error": "❌ Помилка генерації перегляду",
@@ -172,6 +181,8 @@ TRANSLATIONS = {
         "lbl_quality": "Quality (%)",
         "lbl_naming": "File Naming",
         "lbl_prefix": "File Prefix",
+        "chk_preserve_exif": "Preserve EXIF",
+        "help_preserve_exif": "Keep camera metadata (GPS, date, ISO) in the output file",
 
         # Geometry
         "sec_geo": "2️⃣ Geometry (Resize)",
@@ -201,6 +212,11 @@ TRANSLATIONS = {
         "lbl_gap": "Gap (px)",
         "lbl_margin": "Margin (px)",
         "lbl_angle": "Angle (°)",
+        "lbl_wm_gradient": "Opacity gradient",
+        "wm_gradient_none": "None",
+        "wm_gradient_radial": "Radial (soft edges)",
+        "wm_gradient_h": "Horizontal (left→right)",
+        "wm_gradient_v": "Vertical (top→bottom)",
 
         # Performance
         "sec_perf": "⚙️ Performance",
@@ -245,6 +261,8 @@ TRANSLATIONS = {
         # Preview
         "prev_header": "👁️ Live Preview",
         "prev_placeholder": "Select a file (✅) to preview",
+        "prev_demo_hint": "Watermark preview on demo image",
+        "prev_cached": "⚡ Cached",
         "stat_res": "Resolution",
         "stat_size": "File Size",
         "msg_preview_error": "❌ Preview generation error",

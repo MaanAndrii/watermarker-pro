@@ -17,7 +17,7 @@ import base64
 import threading
 from typing import Optional, Tuple, Dict
 
-from PIL import Image, ImageEnhance, ImageOps, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageEnhance, ImageOps, ImageDraw, ImageFont
 from translitua import translit
 from cachetools import LRUCache
 
@@ -311,6 +311,78 @@ def apply_opacity(image: Image.Image, opacity: float) -> Image.Image:
         return image
 
 
+# === DEMO IMAGE ===
+
+def create_demo_image(save_path: str, width: int = 800, height: int = 500):
+    """Create a gradient demo image for watermark preview (no real photo needed)."""
+    try:
+        # PIL resize trick: 1×3 strip → full size (very fast, no numpy)
+        strip = Image.new('RGB', (1, 3))
+        strip.putpixel((0, 0), (90, 120, 170))   # top: dark blue-gray
+        strip.putpixel((0, 1), (170, 195, 225))  # mid: medium blue
+        strip.putpixel((0, 2), (240, 235, 220))  # bottom: warm light
+        bg = strip.resize((width, height), Image.Resampling.BILINEAR)
+
+        draw = ImageDraw.Draw(bg)
+        m = width // 8
+        draw.rectangle([(m, m), (width - m, height - m)], outline=(200, 215, 235), width=2)
+
+        bg.save(save_path, 'JPEG', quality=90, optimize=True)
+        logger.debug(f"Demo image created: {save_path}")
+    except Exception as e:
+        logger.error(f"Demo image creation failed: {e}")
+        raise
+
+
+# === GRADIENT OPACITY ===
+
+def apply_wm_gradient(wm: Image.Image, mode: str) -> Image.Image:
+    """
+    Apply an opacity gradient to a watermark's alpha channel.
+
+    Modes:
+      'radial'     – soft edges, full opacity at centre
+      'horizontal' – fades left → right
+      'vertical'   – fades top → bottom
+
+    Uses the PIL resize trick (tiny gradient → resize) so no numpy is needed.
+    """
+    if mode == 'none':
+        return wm
+
+    w, h = wm.size
+
+    try:
+        if mode == 'radial':
+            # 5×5 filled ellipse → resize to w×h gives a soft radial gradient
+            sz = 5
+            small = Image.new('L', (sz, sz), 0)
+            ImageDraw.Draw(small).ellipse([(0, 0), (sz - 1, sz - 1)], fill=255)
+            mask = small.resize((w, h), Image.Resampling.BILINEAR)
+        elif mode == 'horizontal':
+            # 2×1: left=0, right=255
+            strip = Image.new('L', (2, 1), 0)
+            strip.putpixel((1, 0), 255)
+            mask = strip.resize((w, h), Image.Resampling.BILINEAR)
+        elif mode == 'vertical':
+            # 1×2: top=0, bottom=255
+            strip = Image.new('L', (1, 2), 0)
+            strip.putpixel((0, 1), 255)
+            mask = strip.resize((w, h), Image.Resampling.BILINEAR)
+        else:
+            return wm
+
+        existing_alpha = wm.split()[3]
+        new_alpha = ImageChops.multiply(existing_alpha, mask)
+        result = wm.copy()
+        result.putalpha(new_alpha)
+        return result
+
+    except Exception as e:
+        logger.error(f"Gradient opacity failed ({mode}): {e}")
+        return wm
+
+
 # === MAIN PROCESSING ===
 
 def process_image(
@@ -320,7 +392,8 @@ def process_image(
     resize_config: Dict,
     output_fmt: str,
     quality: int,
-    cancel_token: Optional[CancellationToken] = None
+    cancel_token: Optional[CancellationToken] = None,
+    preserve_exif: bool = True,
 ) -> Tuple[bytes, Dict]:
     """
     Process image with watermark and resize.
@@ -333,6 +406,7 @@ def process_image(
         output_fmt:     'JPEG' | 'WEBP' | 'PNG'
         quality:        Якість 50–100
         cancel_token:   Токен скасування (перевіряється до початку важкої роботи)
+        preserve_exif:  Якщо True — EXIF передається у вихідний файл
 
     Raises:
         InterruptedError: якщо обробку скасовано через cancel_token
@@ -362,7 +436,7 @@ def process_image(
         if wm_obj:
             img = _apply_watermark(img, wm_obj, resize_config)
 
-        result_bytes = _export_image(img, output_fmt, quality, exif_data)
+        result_bytes = _export_image(img, output_fmt, quality, exif_data if preserve_exif else None)
 
         stats = {
             "filename": filename,
@@ -415,6 +489,10 @@ def _apply_watermark(img: Image.Image, wm_obj: Image.Image, config_dict: Dict) -
         wm_h_target = max(10, int(wm_obj.height * w_ratio))
 
         wm_res = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
+
+        gradient_mode = config_dict.get('wm_gradient', 'none')
+        if gradient_mode != 'none':
+            wm_res = apply_wm_gradient(wm_res, gradient_mode)
 
         if angle != 0:
             wm_res = wm_res.rotate(angle, expand=True, resample=Image.BICUBIC)
